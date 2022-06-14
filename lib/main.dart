@@ -1,56 +1,10 @@
-// ignore_for_file: prefer_const_constructors
+// ignore_for_file: prefer_const_constructors_in_immutables, unnecessary_this, use_key_in_widget_constructors
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-void main(){
+
+void main() {
   runApp(App());
-}
-
-class GalleryPage extends StatelessWidget {
-  String title;
-  List<PhotoState> photoStates;
-  final bool tagging;
-  final Set<String> tags;
-
-  final Function toggleTagging;
-  final Function onPhotoSelect;
-  final Function selectTag;
-
-  GalleryPage({
-    required this.title,
-    required this.photoStates,
-    required this.tags,
-    required this.selectTag,
-    required this.tagging,
-    required this.toggleTagging,
-    required this.onPhotoSelect,});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(this.title),
-      ),
-      body: GridView.count(
-        primary: false,
-        crossAxisCount: 2,
-        children: List.of(photoStates.where((ps)=> ps.display ?? true).map((ps) => Photo(state: ps,
-          selectable: tagging,
-          onSelect: onPhotoSelect,
-          onLongPress: toggleTagging,
-        ))),
-      ),
-      drawer: Drawer(
-        child:ListView(
-          children: List.of((tags.map((t) => ListTile(
-            title: Text(t),
-            onTap: () { selectTag(t);
-              Navigator.of(context).pop();
-            },
-          ))),
-        )
-      ),
-    ));
-  }
 }
 
 const List<String> urls =[
@@ -60,29 +14,78 @@ const List<String> urls =[
   "https://www.esa.int/var/esa/storage/images/esa_multimedia/images/2020/07/solar_orbiter_s_first_views_of_the_sun5/22136942-2-eng-GB/Solar_Orbiter_s_first_views_of_the_Sun_pillars.gif",
 ];
 
-class App extends StatefulWidget{
+class App extends StatefulWidget {
   @override
-  AppState createState() => AppState();
+  AppModel createState() => AppModel();
 }
 
-class AppState extends State<App>{
-  bool isTagging = false;
-  List<PhotoState> photoStates = List.of(urls.map((url) => PhotoState(url)));
-  Set<String> tags ={"all", "nature", "logo", "book"};
+class PhotoState {
+  String url;
+  late bool selected;
+  late bool display;
+  Set<String> tags = {};
 
-  void selectTag(String tag){
+  PhotoState(this.url, {selected = false, display = true, tags});
+}
+
+class MyInheritedWidget extends InheritedWidget {
+  final AppModel model;
+
+  MyInheritedWidget({Key? key, required Widget child, required this.model})
+      : super(key: key, child: child);
+
+  static AppModel of(BuildContext context) {
+    return context
+        .dependOnInheritedWidgetOfExactType<MyInheritedWidget>()!
+        .model;
+  }
+
+  @override
+  bool updateShouldNotify(_) => true;
+}
+
+class AppModel extends State<App> {
+  bool isTagging = false;
+
+  List<PhotoState> photoStates = List.of(urls.map((url) => PhotoState(url)));
+
+  Set<String> tags = {"all", "nature", "cat"};
+
+  void toggleTagging(String url) {
     setState(() {
-      if(isTagging){
-        if(tag != "all"){
+      isTagging = !isTagging;
+      photoStates.forEach((element) {
+        if (isTagging && element.url == url) {
+          element.selected = true;
+        } else {
+          element.selected = false;
+        }
+      });
+    });
+  }
+
+  void onPhotoSelect(String url, bool selected) {
+    setState(() {
+      photoStates.forEach((element) {
+        if (element.url == url) {
+          element.selected = selected;
+        }
+      });
+    });
+  }
+
+  void selectTag(String tag) {
+    setState(() {
+      if (isTagging) {
+        if (tag != "all") {
           photoStates.forEach((element) {
-            if(element.selected){
+            if (element.selected) {
               element.tags.add(tag);
             }
           });
         }
         toggleTagging('');
-      }
-      else{
+      } else {
         photoStates.forEach((element) {
           element.display = tag == "all" ? true : element.tags.contains(tag);
         });
@@ -90,92 +93,86 @@ class AppState extends State<App>{
     });
   }
 
-  void toggleTagging(String url){
-    setState(() {
-      isTagging = !isTagging;
-      photoStates.forEach((element) {
-        if(isTagging && element.url == url){
-          element.selected = true;
-        }
-        else{
-          element.selected = false;
-        }
-      });
-    });
-  }
-
-  void onPhototSelect(String url, bool selected){
-    setState(() {
-      photoStates.forEach((element) {
-        if(element.url == url){
-          element.selected = selected;
-        }
-      });
-    });
-  }
-
   @override
-  Widget build(BuildContext context){
+  Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Photo Viewer',
-      home: GalleryPage(
-        title: 'Image Gallery',
-        photoStates: photoStates,
-        tags: tags,
-        tagging: isTagging,
-        toggleTagging: toggleTagging,
-        selectTag: selectTag,
-        onPhotoSelect: onPhototSelect,
-      ),
-      );
+        title: 'Photo Viewer',
+        home: MyInheritedWidget(
+            child: Builder(builder: (BuildContext innerContext) {
+              return GalleryPage(
+                  title: "Image Gallery",
+                  model: MyInheritedWidget.of(innerContext));
+            }),
+            model: this));
   }
 }
 
-class PhotoState{
-  String url;
-  bool selected;
-  bool display = true;
-  Set<String> tags = {};
+class GalleryPage extends StatelessWidget {
+  final String title;
+  final AppModel model;
 
-  PhotoState(this.url, {this.selected = false, this.display = true, tags});
-}
-
-class Photo extends StatelessWidget{
-  final PhotoState state;
-  final bool selectable;
-
-  final Function onLongPress;
-  final Function onSelect;
-
-  Photo({required this.state, required this.selectable, required this.onLongPress, required this.onSelect});
+  GalleryPage({required this.title, required this.model});
 
   @override
-  Widget build(BuildContext context){
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(this.title)),
+      body: Builder(builder: (BuildContext innerContext) {
+        return GridView.count(
+            primary: false,
+            crossAxisCount: 2,
+            children: List.of(model.photoStates
+                .where((ps) => ps.display)
+                .map((ps) => Photo(
+                    state: ps, model: MyInheritedWidget.of(innerContext)))));
+      }),
+      drawer: Drawer(
+          child: ListView(
+        children: List.of(model.tags.map((t) => ListTile(
+              title: Text(t),
+              onTap: () {
+                model.selectTag(t);
+                Navigator.of(context).pop();
+              },
+            ))),
+      )),
+    );
+  }
+}
+
+class Photo extends StatelessWidget {
+  final PhotoState state;
+  final AppModel model;
+
+  Photo({required this.state, required this.model});
+
+  @override
+  Widget build(BuildContext context) {
     List<Widget> children = [
       GestureDetector(
-        child: Image.network(state.url),
-        onLongPress: () => onLongPress(state.url),
-      )
+          child: Image.network(state.url),
+          onLongPress: () => model.toggleTagging(state.url))
     ];
-    if(selectable){
-      children.add(
-        Positioned(
+
+    if (model.isTagging) {
+      children.add(Positioned(
           left: 20,
           top: 0,
           child: Theme(
-            data: Theme.of(context).copyWith(unselectedWidgetColor: Colors.grey[200]),
-            child: Checkbox(
-              value: state.selected,
-              onChanged: (value) => onSelect(state.url, value),
-              activeColor: Colors.white,
-              checkColor: Colors.black,
-            ),
-          ))
-      );
+              data: Theme.of(context)
+                  .copyWith(unselectedWidgetColor: Colors.grey[200]),
+              child: Checkbox(
+                onChanged: (value) {
+                  model.onPhotoSelect(state.url, value!);
+                },
+                value: state.selected,
+                activeColor: Colors.white,
+                checkColor: Colors.black,
+              ))));
     }
-  return Container(
-    padding: EdgeInsets.only(top: 10),
-    child: Stack(alignment: Alignment.center, children: children),
-  );
+
+    return Container(
+        padding: EdgeInsets.only(top: 10),
+        child: Stack(alignment: Alignment.center, children: children));
   }
 }
