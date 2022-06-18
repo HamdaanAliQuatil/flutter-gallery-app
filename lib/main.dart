@@ -43,7 +43,10 @@ class PhotoState {
 class AppModel with ChangeNotifier {
   Stream<bool> get isTagging => _taggingController.stream;
   Stream<List<PhotoState>> get photoStates => _photoStateController.stream;
-
+  Sink<PhotoState> get photoTapSink => _photoTapController.sink;
+  Sink<String> get photoLongPressSink => _photoLongPressController.sink;
+  Sink<String> get tagTapSink => _tagTapController.sink;
+  
   bool _isTagging = false;
   List<PhotoState> _photoStates = List.of(urls.map((url) => PhotoState(url)));
 
@@ -52,6 +55,9 @@ class AppModel with ChangeNotifier {
   // static AppModel of(BuildContext context) => ScopedModel.of<AppModel>(context);
   StreamController<bool> _taggingController = StreamController.broadcast();
   StreamController<List<PhotoState>> _photoStateController = StreamController.broadcast();
+  StreamController<String> _photoLongPressController = StreamController();
+  StreamController<PhotoState> _photoTapController = StreamController();
+  StreamController<String> _tagTapController = StreamController();
 
   AppModel(){
     _photoStateController.onListen = () {
@@ -60,9 +66,21 @@ class AppModel with ChangeNotifier {
     _taggingController.onListen = () {
       _taggingController.add(_isTagging);
     };
+
+    _photoLongPressController.stream.listen((url) { 
+      _toggleTagging(url);
+    });
+
+    _photoTapController.stream.listen((ps) {
+      _onPhotoSelect(ps.url, !ps.selected);
+    });
+      
+    _tagTapController.stream.listen((tag) {
+      _selectTag(tag);
+    });
   }
 
-  void toggleTagging(String url) {
+  void _toggleTagging(String url) {
     _isTagging = !_isTagging;
     _photoStates.forEach((element) {
       if (_isTagging && element.url == url) {
@@ -75,7 +93,7 @@ class AppModel with ChangeNotifier {
     _photoStateController.add(_photoStates);
   }
 
-  void onPhotoSelect(String url, bool selected) {
+  void _onPhotoSelect(String url, bool selected) {
     _photoStates.forEach((element) {
       if (element.url == url) {
         element.selected = selected;
@@ -84,7 +102,7 @@ class AppModel with ChangeNotifier {
     _photoStateController.add(_photoStates);
   }
 
-  void selectTag(String tag) {
+  void _selectTag(String tag) {
     if (_isTagging) {
       if (tag != "all") {
         _photoStates.forEach((element) {
@@ -93,7 +111,7 @@ class AppModel with ChangeNotifier {
           }
         });
       }
-      toggleTagging('');
+      _toggleTagging('');
     } else {
       _photoStates.forEach((element) {
         element.display = tag == "all" ? true : element.tags.contains(tag);
@@ -131,7 +149,7 @@ class GalleryPage extends StatelessWidget {
         children: List.of(model.tags.map((t) => ListTile(
               title: Text(t),
               onTap: () {
-                model.selectTag(t);
+                model.tagTapSink.add(t);
                 Navigator.of(context).pop();
               },
             ))),
@@ -155,7 +173,7 @@ class Photo extends StatelessWidget {
             List<Widget> children = [
       GestureDetector(
           child: Image.network(state.url),
-          onLongPress: () => model.toggleTagging(state.url))
+          onLongPress: () => model.photoLongPressSink.add(state.url))
     ];
 
     if (snapshot.data != null) {
@@ -167,7 +185,7 @@ class Photo extends StatelessWidget {
                   .copyWith(unselectedWidgetColor: Colors.grey[200]),
               child: Checkbox(
                 onChanged: (value) {
-                  model.onPhotoSelect(state.url, value!);
+                  model.photoTapSink.add(state);
                 },
                 value: state.selected,
                 activeColor: Colors.white,
